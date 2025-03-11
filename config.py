@@ -11,7 +11,7 @@ DATABASE_FILE = 'bookstore'
 # SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:@localhost/'+ DATABASE_FILE +'?charset=utf8mb4' % quote('admin')
 # SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:%s@localhost/bookstore?charset=utf8mb4' % quote('Bestpro890!@#')
 
-SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:@localhost/'+ DATABASE_FILE +'?charset=utf8mb4' # Non_password_MySQL
+SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:@127.0.0.1:3306/'+ DATABASE_FILE +'?charset=utf8mb4' # Non_password_MySQL
 # SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://admin:%s@localhost/bookstore?charset=utf8mb4' % quote('admin')
 # SQLALCHEMY_TRACK_MODIFICATIONS = True
 SQLALCHEMY_TRACK_MODIFICATIONS = False
