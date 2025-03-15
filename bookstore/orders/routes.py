@@ -1,36 +1,54 @@
 import datetime
 
-from flask import Blueprint, request, render_template, redirect, url_for, flash, session, jsonify, abort
-from flask_security import logout_user, current_user, roles_accepted, login_required
+from flask import (Blueprint, abort, flash, jsonify, redirect, render_template,
+                   request, session, url_for)
+from flask_security import (current_user, login_required, logout_user,
+                            roles_accepted)
 
 import config
-
-from bookstore.orders.forms import Checkout
-from bookstore.cart.utils import handle_cart
 from bookstore import dao, utils
+from bookstore.cart.utils import handle_cart
+from bookstore.orders.forms import Checkout
 from bookstore.vnpay.form import PaymentForm
 from bookstore.vnpay.vnpay import Vnpay
 
-orders = Blueprint('orders', __name__)
+orders = Blueprint("orders", __name__)
 
 
 @orders.route("/orders")
 @login_required
 def orderBooks():
     orders = dao.get_orders_by_customer_id(current_user.id)
-    return render_template('orderBooks.html', title='Order Books', orders=orders, datetime=datetime.datetime)
+    return render_template(
+        "orderBooks.html",
+        title="Order Books",
+        orders=orders,
+        datetime=datetime.datetime,
+    )
 
 
-@orders.route("/order_details", methods=['GET'])
+@orders.route("/order_details", methods=["GET"])
 @login_required
 def view_order_details():
     order_id = int(request.args.get("order_id"))
-    products, grand_total, grand_total_plus_shipping, order_quantity_total, quick_ship, isPaid, isDelivered, isCanceled = utils.handle_order_details(
-        order_id)
-    return render_template("order_details.html", products=products, grand_total=grand_total,
-                           grand_total_plus_shipping=grand_total_plus_shipping,
-                           order_quantity_total=order_quantity_total,
-                           quick_ship=quick_ship)
+    (
+        products,
+        grand_total,
+        grand_total_plus_shipping,
+        order_quantity_total,
+        quick_ship,
+        isPaid,
+        isDelivered,
+        isCanceled,
+    ) = utils.handle_order_details(order_id)
+    return render_template(
+        "order_details.html",
+        products=products,
+        grand_total=grand_total,
+        grand_total_plus_shipping=grand_total_plus_shipping,
+        order_quantity_total=order_quantity_total,
+        quick_ship=quick_ship,
+    )
 
 
 @orders.route("/api/order_details")
@@ -38,24 +56,34 @@ def view_order_details():
 def get_order_details():
     order_id = int(request.args.get("order_id"))
     if order_id:
-        products, grand_total, grand_total_plus_shipping, order_quantity_total, quick_ship, isPaid, isDelivered, isCanceled = utils.handle_order_details(
-            order_id)
-        return jsonify({
-            "order_id": order_id,
-            "products": products,
-            "grand_total": grand_total,
-            "grand_total_plus_shipping": grand_total_plus_shipping,
-            "order_quantity_total": order_quantity_total,
-            "quick_ship": quick_ship,
-            "isPaid": isPaid,
-            "isDelivered": isDelivered,
-            "isCanceled": isCanceled
-        })
+        (
+            products,
+            grand_total,
+            grand_total_plus_shipping,
+            order_quantity_total,
+            quick_ship,
+            isPaid,
+            isDelivered,
+            isCanceled,
+        ) = utils.handle_order_details(order_id)
+        return jsonify(
+            {
+                "order_id": order_id,
+                "products": products,
+                "grand_total": grand_total,
+                "grand_total_plus_shipping": grand_total_plus_shipping,
+                "order_quantity_total": order_quantity_total,
+                "quick_ship": quick_ship,
+                "isPaid": isPaid,
+                "isDelivered": isDelivered,
+                "isCanceled": isCanceled,
+            }
+        )
     else:
         abort(400)
 
 
-@orders.route('/checkout', methods=['GET', 'POST'])
+@orders.route("/checkout", methods=["GET", "POST"])
 @login_required
 def checkout():
     configuration = dao.get_configuration()
@@ -66,7 +94,9 @@ def checkout():
     if request.method == "GET":
         customer = None
         # in table order request
-        if (request.args.get("staff_id") is not None) and (request.args.get("customer_phone")):
+        if (request.args.get("staff_id") is not None) and (
+            request.args.get("customer_phone")
+        ):
             if int(request.args.get("staff_id")) == current_user.id:
                 customer_phone = request.args.get("customer_phone")
                 if customer_phone:
@@ -97,37 +127,49 @@ def checkout():
             customer = current_user
             # staff is the one who managed online order, has username = staff@example.com
             staff = dao.get_user_by_username("staff@example.com")
-        order = utils.create_order(customer.id, staff.id, session['cart'], form.payment_type.data)
-        session['cart'] = []
+        order = utils.create_order(
+            customer.id, staff.id, session["cart"], form.payment_type.data
+        )
+        session["cart"] = []
         session.modified = True
 
-        if (current_user.id != customer.id):
-            if (order.payment_method.name.__eq__("CASH")):
+        if current_user.id != customer.id:
+            if order.payment_method.name.__eq__("CASH"):
                 flash("New order has been created", "success")
                 return redirect(url_for("users.staff"))
         else:
-            if current_user.phone_number != form.phone_number.data or current_user.address != form.address.data:
+            if (
+                current_user.phone_number != form.phone_number.data
+                or current_user.address != form.address.data
+            ):
                 update_user = dao.get_user_by_id(current_user.id)
                 update_user.phone_number = form.phone_number.data
                 update_user.address = form.address.data
                 dao.save_user(update_user)
 
         if order.payment_method.name.__eq__("BANKING"):
-            return redirect(url_for("orders.process_vnpay", order_id=order.id, user_id=customer.id))
+            return redirect(
+                url_for("orders.process_vnpay", order_id=order.id, user_id=customer.id)
+            )
 
         else:
-            return redirect(url_for('orders.orderBooks'))
+            return redirect(url_for("orders.orderBooks"))
 
-    return render_template('checkout.html', form=form, grand_total=grand_total,
-                           grand_total_plus_shipping=grand_total_plus_shipping, quantity_total=quantity_total,
-                           quick_ship=configuration.quick_ship)
+    return render_template(
+        "checkout.html",
+        form=form,
+        grand_total=grand_total,
+        grand_total_plus_shipping=grand_total_plus_shipping,
+        quantity_total=quantity_total,
+        quick_ship=configuration.quick_ship,
+    )
 
 
 @orders.route("/vnpay", methods=["GET", "POST"])
 @login_required
 def process_vnpay():
     form = PaymentForm()
-    if request.method == 'POST':
+    if request.method == "POST":
         # Process input data and build url payment
         if form.validate_on_submit():
             order_type = form.order_type.data
@@ -139,27 +181,33 @@ def process_vnpay():
             ipaddr = request.remote_addr
             # Build URL Payment
             vnp = Vnpay()
-            vnp.requestData['vnp_Version'] = '2.1.0'
-            vnp.requestData['vnp_Command'] = 'pay'
-            vnp.requestData['vnp_TmnCode'] = config.VNPAY_TMN_CODE
-            vnp.requestData['vnp_Amount'] = amount * 100
-            vnp.requestData['vnp_CurrCode'] = 'VND'
-            vnp.requestData['vnp_TxnRef'] = str(order_id) + "_" + datetime.datetime.now().__str__()
-            vnp.requestData['vnp_OrderInfo'] = order_desc
-            vnp.requestData['vnp_OrderType'] = order_type
+            vnp.requestData["vnp_Version"] = "2.1.0"
+            vnp.requestData["vnp_Command"] = "pay"
+            vnp.requestData["vnp_TmnCode"] = config.VNPAY_TMN_CODE
+            vnp.requestData["vnp_Amount"] = amount * 100
+            vnp.requestData["vnp_CurrCode"] = "VND"
+            vnp.requestData["vnp_TxnRef"] = (
+                str(order_id) + "_" + datetime.datetime.now().__str__()
+            )
+            vnp.requestData["vnp_OrderInfo"] = order_desc
+            vnp.requestData["vnp_OrderType"] = order_type
             # Check language, default: vn
-            if language and language != '':
-                vnp.requestData['vnp_Locale'] = language
+            if language and language != "":
+                vnp.requestData["vnp_Locale"] = language
             else:
-                vnp.requestData['vnp_Locale'] = 'vn'
+                vnp.requestData["vnp_Locale"] = "vn"
                 # Check bank_code, if bank_code is empty, customer will be selected bank on VNPAY
             if bank_code and bank_code != "":
-                vnp.requestData['vnp_BankCode'] = bank_code
+                vnp.requestData["vnp_BankCode"] = bank_code
 
-            vnp.requestData['vnp_CreateDate'] = datetime.datetime.now().strftime('%Y%m%d%H%M%S')  # 20150410063022
-            vnp.requestData['vnp_IpAddr'] = ipaddr
-            vnp.requestData['vnp_ReturnUrl'] = config.VNPAY_RETURN_URL
-            vnpay_payment_url = vnp.get_payment_url(config.VNPAY_PAYMENT_URL, config.VNPAY_HASH_SECRET_KEY)
+            vnp.requestData["vnp_CreateDate"] = datetime.datetime.now().strftime(
+                "%Y%m%d%H%M%S"
+            )  # 20150410063022
+            vnp.requestData["vnp_IpAddr"] = ipaddr
+            vnp.requestData["vnp_ReturnUrl"] = config.VNPAY_RETURN_URL
+            vnpay_payment_url = vnp.get_payment_url(
+                config.VNPAY_PAYMENT_URL, config.VNPAY_HASH_SECRET_KEY
+            )
             return redirect(vnpay_payment_url)
         else:
             print("Form input not validate")
@@ -177,7 +225,8 @@ def process_vnpay():
         form.order_id.data = order.id
         form.amount.data = order.total_payment
         form.order_desc.data = "%s pay for bookstore online shopping" % (
-                user.first_name + user.last_name)
+            user.first_name + user.last_name
+        )
         return render_template("vnpay/payment.html", title="DISCHARGE", form=form)
 
 
@@ -187,42 +236,65 @@ def payment_return():
     if request.args:
         vnp = Vnpay()
         vnp.responseData = request.args.to_dict()
-        order_id = request.args.get('vnp_TxnRef')
-        amount = int(request.args.get('vnp_Amount')) / 100
-        order_desc = request.args.get('vnp_OrderInfo')
+        order_id = request.args.get("vnp_TxnRef")
+        amount = int(request.args.get("vnp_Amount")) / 100
+        order_desc = request.args.get("vnp_OrderInfo")
         vnp_BankTranNo = request.args.get("vnp_BankTranNo")
-        vnp_TransactionNo = request.args.get('vnp_TransactionNo')
-        vnp_ResponseCode = request.args.get('vnp_ResponseCode')
-        vnp_PayDate = request.args.get('vnp_PayDate')
-        vnp_BankCode = request.args.get('vnp_BankCode')
-        vnp_CardType = request.args.get('vnp_CardType')
-        vnp_SecureHash = request.args.get('vnp_SecureHash')
+        vnp_TransactionNo = request.args.get("vnp_TransactionNo")
+        vnp_ResponseCode = request.args.get("vnp_ResponseCode")
+        vnp_PayDate = request.args.get("vnp_PayDate")
+        vnp_BankCode = request.args.get("vnp_BankCode")
+        vnp_CardType = request.args.get("vnp_CardType")
+        vnp_SecureHash = request.args.get("vnp_SecureHash")
         if vnp.validate_response(config.VNPAY_HASH_SECRET_KEY):
             if vnp_ResponseCode == "00":
-                utils.order_paid_by_vnpay(order_id=int(order_id[0:2:1]), bank_transaction_number=vnp_BankTranNo,
-                                          vnpay_transaction_number=vnp_TransactionNo, bank_code=vnp_BankCode,
-                                          card_type=vnp_CardType, secure_hash=vnp_SecureHash, received_money=amount,
-                                          paid_date=vnp_PayDate)
-                return render_template("vnpay/payment_return.html", title="Payment result",
-                                       result="Success", order_id=order_id,
-                                       amount=amount,
-                                       order_desc=order_desc,
-                                       vnp_TransactionNo=vnp_TransactionNo,
-                                       vnp_ResponseCode=vnp_ResponseCode)
+                utils.order_paid_by_vnpay(
+                    order_id=int(order_id[0:2:1]),
+                    bank_transaction_number=vnp_BankTranNo,
+                    vnpay_transaction_number=vnp_TransactionNo,
+                    bank_code=vnp_BankCode,
+                    card_type=vnp_CardType,
+                    secure_hash=vnp_SecureHash,
+                    received_money=amount,
+                    paid_date=vnp_PayDate,
+                )
+                return render_template(
+                    "vnpay/payment_return.html",
+                    title="Payment result",
+                    result="Success",
+                    order_id=order_id,
+                    amount=amount,
+                    order_desc=order_desc,
+                    vnp_TransactionNo=vnp_TransactionNo,
+                    vnp_ResponseCode=vnp_ResponseCode,
+                )
             else:
-                return render_template("vnpay/payment_return.html", title="Payment result",
-                                       result="Error", order_id=order_id,
-                                       amount=amount,
-                                       order_desc=order_desc,
-                                       vnp_TransactionNo=vnp_TransactionNo,
-                                       vnp_ResponseCode=vnp_ResponseCode)
+                return render_template(
+                    "vnpay/payment_return.html",
+                    title="Payment result",
+                    result="Error",
+                    order_id=order_id,
+                    amount=amount,
+                    order_desc=order_desc,
+                    vnp_TransactionNo=vnp_TransactionNo,
+                    vnp_ResponseCode=vnp_ResponseCode,
+                )
         else:
-            return render_template("vnpay/payment_return.html",
-                                   title="Payment result", result="Error", order_id=order_id, amount=amount,
-                                   order_desc=order_desc, vnp_TransactionNo=vnp_TransactionNo,
-                                   vnp_ResponseCode=vnp_ResponseCode, msg="Wrong checksum")
+            return render_template(
+                "vnpay/payment_return.html",
+                title="Payment result",
+                result="Error",
+                order_id=order_id,
+                amount=amount,
+                order_desc=order_desc,
+                vnp_TransactionNo=vnp_TransactionNo,
+                vnp_ResponseCode=vnp_ResponseCode,
+                msg="Wrong checksum",
+            )
     else:
-        return render_template("vnpay/payment_return.html", title="Kết quả thanh toán", result="")
+        return render_template(
+            "vnpay/payment_return.html", title="Kết quả thanh toán", result=""
+        )
 
 
 @orders.route("/api/order_delivered", methods=["POST"])
@@ -238,7 +310,7 @@ def order_delivered():
         return jsonify({"code": 500, "order_id": order_id})
 
 
-@orders.route("/api/order/cash/pay", methods = ["POST"])
+@orders.route("/api/order/cash/pay", methods=["POST"])
 def intable_pay_order():
     try:
 

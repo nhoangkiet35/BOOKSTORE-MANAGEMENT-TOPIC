@@ -1,13 +1,15 @@
 import datetime
+
+import cloudinary.uploader
 from flask_mailman import EmailMessage
+
 import config
 from bookstore import dao
-import cloudinary.uploader
 
 
 def save_picture(form_picture):
     response = cloudinary.uploader.upload(form_picture)
-    return response['secure_url']
+    return response["secure_url"]
 
 
 def send_verify_code(user_id):
@@ -68,8 +70,7 @@ def extract_search_user_by_phone(kw, max=5):
     print(list_user)
     result = []
     for user in list_user:
-        result.append({
-            "name": user.first_name + " " +  user.last_name,
-            "phone": user.phone_number
-        })
+        result.append(
+            {"name": user.first_name + " " + user.last_name, "phone": user.phone_number}
+        )
     return result

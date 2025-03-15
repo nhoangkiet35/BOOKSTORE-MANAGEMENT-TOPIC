@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import IntegerField, HiddenField
+from wtforms import HiddenField, IntegerField
+
 
 class AddToCart(FlaskForm):
-    quantity = IntegerField('Quantity')
-    id = IntegerField('ID')
+    quantity = IntegerField("Quantity")
+    id = IntegerField("ID")

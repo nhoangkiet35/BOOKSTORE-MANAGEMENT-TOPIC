@@ -1,18 +1,20 @@
 import os
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 
+import cloudinary.uploader
 import pandas
 from flask import current_app
+
 from bookstore import dao
-from bookstore.models import ImportTicket, Category, Author, Book, ImportDetails, OrderDetails, Order
-import cloudinary.uploader
+from bookstore.models import (Author, Book, Category, ImportDetails,
+                              ImportTicket, Order, OrderDetails)
 
 
 def import_book(excel):
     # save file
 
     response = cloudinary.uploader.upload(excel, resource_type="auto", format="xlsx")
-    file_url = response['secure_url']
+    file_url = response["secure_url"]
     # read data
     data = pandas.read_excel(excel)
     # handle new book data
@@ -22,10 +24,10 @@ def import_book(excel):
     # get bookstore configuration
     configuration = dao.get_configuration()
     for index, row in data.iterrows():
-        name = str(row['Name']).strip()
-        category = str(row['Category']).strip()
-        author = str(row['Author']).strip()
-        quantity = int(row['Quantity'])
+        name = str(row["Name"]).strip()
+        category = str(row["Category"]).strip()
+        author = str(row["Author"]).strip()
+        quantity = int(row["Quantity"])
         # check the quantity is valid or not
         if quantity < configuration.min_import_quantity:
             continue
@@ -40,7 +42,12 @@ def import_book(excel):
             if not db_author:
                 db_author = Author(name=author)
                 dao.save_author(db_author)
-            db_book = Book(name=name, author=db_author, category=db_category, available_quantity=quantity)
+            db_book = Book(
+                name=name,
+                author=db_author,
+                category=db_category,
+                available_quantity=quantity,
+            )
             dao.save_book(book=db_book)
         else:
             # check in stock quantity
@@ -50,7 +57,9 @@ def import_book(excel):
                 db_book.available_quantity += quantity
                 dao.save_book(book=db_book)
         # save ticket details
-        ticket_details = ImportDetails(quantity=quantity, book=db_book, import_ticket=ticket)
+        ticket_details = ImportDetails(
+            quantity=quantity, book=db_book, import_ticket=ticket
+        )
         dao.save_ticket_details(ticket_details=ticket_details)
 
 
@@ -69,11 +78,11 @@ def statistic_book_by_month(month):
     index = 1
     for res in sql_result:
         temp = {}
-        temp['index'] = index
-        temp['name'] = res[0]
-        temp['category'] = res[1]
-        temp['quantity'] = res[2]
-        temp['percentage'] = round((res[2] / total_quantity) * 100, 2)
+        temp["index"] = index
+        temp["name"] = res[0]
+        temp["category"] = res[1]
+        temp["quantity"] = res[2]
+        temp["percentage"] = round((res[2] / total_quantity) * 100, 2)
         data.append(temp)
         index += 1
     return data
@@ -91,17 +100,19 @@ def statistic_category_by_month(month):
     index = 1
     for res in sql_result:
         temp = {}
-        temp['index'] = index
-        temp['name'] = res[0]
-        temp['revenue'] = res[2]
-        temp['number_of_purchases'] = res[1]
-        temp['percentage'] = round((res[2] / total_revenue) * 100, 2)
+        temp["index"] = index
+        temp["name"] = res[0]
+        temp["revenue"] = res[2]
+        temp["number_of_purchases"] = res[1]
+        temp["percentage"] = round((res[2] / total_revenue) * 100, 2)
         data.append(temp)
         index += 1
     return data
 
 
-def create_order(customer_id, staff_id, books, payment_method_id, initial_date=datetime.now()):
+def create_order(
+    customer_id, staff_id, books, payment_method_id, initial_date=datetime.now()
+):
     configuration = dao.get_configuration()
     customer = dao.get_user_by_id(customer_id)
     staff = dao.get_user_by_id(staff_id)
@@ -110,24 +121,27 @@ def create_order(customer_id, staff_id, books, payment_method_id, initial_date=d
     order_details = []
     total_payment = 0
     for ordered_book in books:
-        book = dao.get_book_by_id(ordered_book['id'])
+        book = dao.get_book_by_id(ordered_book["id"])
         if book is not None:
-            detail = OrderDetails(unit_price=book.unit_price, quantity=ordered_book['quantity'], book=book)
-            total_payment += book.unit_price * ordered_book['quantity']
+            detail = OrderDetails(
+                unit_price=book.unit_price, quantity=ordered_book["quantity"], book=book
+            )
+            total_payment += book.unit_price * ordered_book["quantity"]
             order_details.append(detail)
-            book.available_quantity -= ordered_book['quantity']
+            book.available_quantity -= ordered_book["quantity"]
             dao.save_book(book)
     # create order
     if payment_method.name.__eq__("BANKING"):
         total_payment += configuration.quick_ship
-    order = Order(cancel_date=initial_date + timedelta(hours=configuration.time_to_end_order),
-                  payment_method=payment_method,
-                  customer=customer,
-                  staff=staff,
-                  total_payment=total_payment,
-                  initiated_date=initial_date,
-                  delivery_at=customer.address
-                  )
+    order = Order(
+        cancel_date=initial_date + timedelta(hours=configuration.time_to_end_order),
+        payment_method=payment_method,
+        customer=customer,
+        staff=staff,
+        total_payment=total_payment,
+        initiated_date=initial_date,
+        delivery_at=customer.address,
+    )
 
     dao.save_order(order)
     for od in order_details:
@@ -148,15 +162,28 @@ def order_paid_incash(received_money, order_id, paid_date=datetime.now()):
     return 0
 
 
-def order_paid_by_vnpay(order_id, bank_transaction_number, vnpay_transaction_number, bank_code, card_type,
-                        secure_hash, received_money, paid_date):
+def order_paid_by_vnpay(
+    order_id,
+    bank_transaction_number,
+    vnpay_transaction_number,
+    bank_code,
+    card_type,
+    secure_hash,
+    received_money,
+    paid_date,
+):
     order = dao.get_order_by_id(order_id)
     if not order or order.paid_date:
         return -1
     else:
-        infor = dao.save_banking_information(order_id=order_id, bank_transaction_number=bank_transaction_number,
-                                             vnpay_transaction_number=vnpay_transaction_number, bank_code=bank_code,
-                                             card_type=card_type, secure_hash=secure_hash)
+        infor = dao.save_banking_information(
+            order_id=order_id,
+            bank_transaction_number=bank_transaction_number,
+            vnpay_transaction_number=vnpay_transaction_number,
+            bank_code=bank_code,
+            card_type=card_type,
+            secure_hash=secure_hash,
+        )
         if infor:
             order.received_money = received_money
             order.paid_date = paid_date
@@ -191,16 +218,47 @@ def handle_order_details(order_id):
             order_quantity_total += quantity
             grand_total += total
 
-            products.append({'id': book.id, 'name': book.name, 'unit_price': book.unit_price,
-                             'image_src': book.image_src, 'quantity': quantity, 'total': total, 'index': index})
+            products.append(
+                {
+                    "id": book.id,
+                    "name": book.name,
+                    "unit_price": book.unit_price,
+                    "image_src": book.image_src,
+                    "quantity": quantity,
+                    "total": total,
+                    "index": index,
+                }
+            )
             index += 1
 
         grand_total_plus_shipping = order.total_payment
-        quick_ship = grand_total_plus_shipping - grand_total if grand_total_plus_shipping - grand_total >= 0 else None
-        isPaid = True if (order.paid_date is not None) and (order.received_money is not None) else False
+        quick_ship = (
+            grand_total_plus_shipping - grand_total
+            if grand_total_plus_shipping - grand_total >= 0
+            else None
+        )
+        isPaid = (
+            True
+            if (order.paid_date is not None) and (order.received_money is not None)
+            else False
+        )
         isDelivered = True if order.delivered_date is not None else False
-        isCanceled = True if (order.paid_date is None) and (order.cancel_date < datetime.now()) else False
-        return products, grand_total, grand_total_plus_shipping, order_quantity_total, quick_ship, isPaid, isDelivered, isCanceled
+        isCanceled = (
+            True
+            if (order.paid_date is None) and (order.cancel_date < datetime.now())
+            else False
+        )
+        return (
+            products,
+            grand_total,
+            grand_total_plus_shipping,
+            order_quantity_total,
+            quick_ship,
+            isPaid,
+            isDelivered,
+            isCanceled,
+        )
+
 
 def truncate_text(text, max_length=300):
     if len(text) > max_length:
