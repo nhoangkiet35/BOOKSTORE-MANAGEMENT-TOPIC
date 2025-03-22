@@ -1,4 +1,5 @@
-# Create dummy secrey key so we can use sessions
+import os
+# Create a dummy secret key so we can use sessions
 from urllib.parse import quote
 
 SECRET_KEY = "c007d6402c1b77b1fac427a381d995fd"
@@ -11,11 +12,8 @@ DATABASE_FILE = "bookstore"
 # SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:@localhost/'+ DATABASE_FILE +'?charset=utf8mb4' % quote('admin')
 # SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:%s@localhost/bookstore?charset=utf8mb4' % quote('Bestpro890!@#')
 
-SQLALCHEMY_DATABASE_URI = (
-    "mysql+pymysql://root:@127.0.0.1:3306/" + DATABASE_FILE + "?charset=utf8mb4"
-)  # Non_password_MySQL
-# SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://admin:%s@localhost/bookstore?charset=utf8mb4' % quote('admin')
-# SQLALCHEMY_TRACK_MODIFICATIONS = True
+# Railway sẽ cấp một DATABASE_URL như sau:
+SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "mysql+pymysql://root:password@localhost:3306/bookstore")  # Non_password_MySQL
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 
